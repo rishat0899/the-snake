@@ -48,37 +48,47 @@ pygame.display.set_caption('Змейка')
 clock = pygame.time.Clock()
 
 
-# Тут опишите все классы игры.
 class GameObject():
     """Базовый класс игровых объектов."""
 
-    def __init__(self, position=None, body_color=None):
-        if position:
-            self.position = position
-        else:
-            self.position = SCREEN_CENTER
+    def __init__(self, position=SCREEN_CENTER, body_color=None):
+        """Инициализируем базовые атрибуты объекта."""
+        self.position = SCREEN_CENTER
         self.body_color = body_color
 
     def draw(self):
-        """Базовый метод отрисовки объектов."""
-        pass
+        """Метод отрисовки объектов.
+
+        Обязательный для переопределения в дочерних классах.
+        При вызове из родительского класса должен вызывать NotImplementedError.
+        """
+        raise NotImplementedError(
+            'Метод draw() должен быть переопределен в дочернем классе'
+        )
 
 
 class Apple(GameObject):
     """Класс, описывающий яблоко и его логику."""
 
-    def __init__(self, body_color=APPLE_COLOR):
+    def __init__(self, body_color=APPLE_COLOR, occupied_positions=None):
         """Инициализация яблока с заданным цветом и случайным положением."""
         super().__init__(position=None, body_color=body_color)
         # Устанавливаю случайное положение яблока
-        self.randomize_position()
+        self.randomize_position(occupied_positions)
 
-    def randomize_position(self):
+    def randomize_position(self, occupied_positions=None):
         """Задаем яблоку новые случайные координаты, выровненные по сетке."""
-        random_x = randint(0, APPLE_MAX_CELL_INDEX_X) * GRID_SIZE
-        random_y = randint(0, APPLE_MAX_CELL_INDEX_Y) * GRID_SIZE
+        if occupied_positions is None:
+            occupied_positions = []
 
-        self.position = (random_x, random_y)
+        # Генерируем координаты до тех пор, пока не найдем свободную клетку
+        while True:
+            random_x = randint(0, APPLE_MAX_CELL_INDEX_X) * GRID_SIZE
+            random_y = randint(0, APPLE_MAX_CELL_INDEX_Y) * GRID_SIZE
+            new_position = (random_x, random_y)
+            if new_position not in occupied_positions:
+                self.position = new_position
+                break
 
     def draw(self):
         """Отрисовка яблока."""
@@ -92,14 +102,10 @@ class Snake(GameObject):
 
     def __init__(self, body_color=SNAKE_COLOR):
         """Инициализация змейки с начальными параметрами."""
-        super().__init__(position=None, body_color=body_color)
+        super().__init__(body_color=body_color)
 
         # Начальные атрибуты змейки
-        self.length = 1
-        self.positions = [self.position]
-        self.direction = RIGHT
-        self.next_direction = None
-        self.last = None
+        self.reset()
 
     def get_head_position(self):
         """Возвращает координаты головы змейки."""
@@ -107,13 +113,9 @@ class Snake(GameObject):
 
     def draw(self):
         """Отрисовка змейки"""
-        for position in self.positions[:-1]:
-            rect = (pygame.Rect(position, (GRID_SIZE, GRID_SIZE)))
-            pygame.draw.rect(screen, self.body_color, rect)
-            pygame.draw.rect(screen, BORDER_COLOR, rect, 1)
-
         # Отрисовка головы змейки
-        head_rect = pygame.Rect(self.positions[0], (GRID_SIZE, GRID_SIZE))
+        head_rect = pygame.Rect(self.get_head_position(),
+                                (GRID_SIZE, GRID_SIZE))
         pygame.draw.rect(screen, self.body_color, head_rect)
         pygame.draw.rect(screen, BORDER_COLOR, head_rect, 1)
 
@@ -125,14 +127,14 @@ class Snake(GameObject):
     def move(self):
         """Обновляет позицию змейки."""
         # Получаем текущую позицию головы
-        head_position_x, head_position_y = self.get_head_position()
+        head_pos_x, head_pos_y = self.get_head_position()
 
         # Получаем направление движения
-        dx, dy = self.direction
+        direction_x, direction_y = self.direction
 
         # Вычисляем новую позицию головы
-        head_x_new = (head_position_x + dx * GRID_SIZE) % SCREEN_WIDTH
-        head_y_new = (head_position_y + dy * GRID_SIZE) % SCREEN_HEIGHT
+        head_x_new = (head_pos_x + direction_x * GRID_SIZE) % SCREEN_WIDTH
+        head_y_new = (head_pos_y + direction_y * GRID_SIZE) % SCREEN_HEIGHT
         head_position_new = (head_x_new, head_y_new)
 
         # Добавляем новую позицию головы в начало списка positions
@@ -150,16 +152,21 @@ class Snake(GameObject):
             self.direction = self.next_direction
             self.next_direction = None
 
-    def reset(self):
+    def reset(self, is_start=True):
         """Сбрасываем змейку в начальное состояние."""
+        # Сбрасываем длину змейку до одной клетки
         self.length = 1
         # Возвращаем змейку в центральную точку
-        self.positions = [self.position]
-
-        # Выбираем случайное начальное направление движения
-        self.direction = choice([UP, DOWN, LEFT, RIGHT])
+        self.positions = [SCREEN_CENTER]
+        # Выбираем начальное направление движения
+        # Если начало игры, то направление вправо
+        if is_start:
+            self.direction = RIGHT
+        # Если сброс, то случайное направление
+        else:
+            self.direction = choice([UP, DOWN, LEFT, RIGHT])
+        # Убираем следующее направление
         self.next_direction = None
-
         # Очищаем след последнего сегмента
         self.last = None
 
@@ -188,7 +195,7 @@ def main():
 
     # Создаем экземпляры объектов
     snake = Snake()
-    apple = Apple()
+    apple = Apple(occupied_positions=snake.positions)
 
     # Очищаем экран
     screen.fill(BOARD_BACKGROUND_COLOR)
@@ -211,12 +218,12 @@ def main():
         # Съесть яблоко и переместить яблоко на новую позицию
         if snake.get_head_position() == apple.position:
             snake.length += 1
-            apple.randomize_position()
+            apple.randomize_position(snake.positions)
 
         # Если координаты головы = координатам других частей тела,
         # Сбросить змейку и очистить экран от остального тела
         elif snake.get_head_position() in snake.positions[1:]:
-            snake.reset()
+            snake.reset(is_start=False)
             screen.fill(BOARD_BACKGROUND_COLOR)
 
         # Отрисовываем объекты на новых позициях
