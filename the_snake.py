@@ -53,7 +53,7 @@ class GameObject():
 
     def __init__(self, position=SCREEN_CENTER, body_color=None):
         """Инициализируем базовые атрибуты объекта."""
-        self.position = SCREEN_CENTER
+        self.position = position
         self.body_color = body_color
 
     def draw(self):
@@ -72,8 +72,7 @@ class Apple(GameObject):
 
     def __init__(self, body_color=APPLE_COLOR, occupied_positions=None):
         """Инициализация яблока с заданным цветом и случайным положением."""
-        super().__init__(position=None, body_color=body_color)
-        # Устанавливаю случайное положение яблока
+        super().__init__(body_color=body_color)
         self.randomize_position(occupied_positions)
 
     def randomize_position(self, occupied_positions=None):
@@ -81,14 +80,10 @@ class Apple(GameObject):
         if occupied_positions is None:
             occupied_positions = []
 
-        # Генерируем координаты до тех пор, пока не найдем свободную клетку
-        while True:
+        while self.position in occupied_positions:
             random_x = randint(0, APPLE_MAX_CELL_INDEX_X) * GRID_SIZE
             random_y = randint(0, APPLE_MAX_CELL_INDEX_Y) * GRID_SIZE
-            new_position = (random_x, random_y)
-            if new_position not in occupied_positions:
-                self.position = new_position
-                break
+            self.position = (random_x, random_y)
 
     def draw(self):
         """Отрисовка яблока."""
@@ -127,14 +122,14 @@ class Snake(GameObject):
     def move(self):
         """Обновляет позицию змейки."""
         # Получаем текущую позицию головы
-        head_pos_x, head_pos_y = self.get_head_position()
+        head_x_current, head_y_current = self.get_head_position()
 
         # Получаем направление движения
         direction_x, direction_y = self.direction
 
         # Вычисляем новую позицию головы
-        head_x_new = (head_pos_x + direction_x * GRID_SIZE) % SCREEN_WIDTH
-        head_y_new = (head_pos_y + direction_y * GRID_SIZE) % SCREEN_HEIGHT
+        head_x_new = (head_x_current + direction_x * GRID_SIZE) % SCREEN_WIDTH
+        head_y_new = (head_y_current + direction_y * GRID_SIZE) % SCREEN_HEIGHT
         head_position_new = (head_x_new, head_y_new)
 
         # Добавляем новую позицию головы в начало списка positions
@@ -154,20 +149,18 @@ class Snake(GameObject):
 
     def reset(self, is_start=True):
         """Сбрасываем змейку в начальное состояние."""
-        # Сбрасываем длину змейку до одной клетки
+        # Сбрасываем длину змейку до одной клетки и возвращаем в центр
         self.length = 1
-        # Возвращаем змейку в центральную точку
         self.positions = [SCREEN_CENTER]
+
         # Выбираем начальное направление движения
-        # Если начало игры, то направление вправо
         if is_start:
             self.direction = RIGHT
-        # Если сброс, то случайное направление
         else:
             self.direction = choice([UP, DOWN, LEFT, RIGHT])
-        # Убираем следующее направление
+
+        # Убираем следующее направление и очищаем след последнего сегмента
         self.next_direction = None
-        # Очищаем след последнего сегмента
         self.last = None
 
 
@@ -196,9 +189,6 @@ def main():
     # Создаем экземпляры объектов
     snake = Snake()
     apple = Apple(occupied_positions=snake.positions)
-
-    # Очищаем экран
-    screen.fill(BOARD_BACKGROUND_COLOR)
 
     while True:
         # Задаем скорость игры
